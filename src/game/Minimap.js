@@ -239,7 +239,10 @@ export class Minimap {
 				if ( k >= 0 ) {
 
 					c = mix( c, C.path, ( T.path[ k ] / 255 ) * 0.85 );
-					c = mix( c, C.scarp, ( T.scarp[ k ] / 255 ) * 0.5 );
+					// scarp was added to TerrainData after the Three/TSL baseline; it is only a map tint.
+					// Treat a missing mask as zero so the minimap works with the historical terrain data.
+					const scarp = T.scarp ? T.scarp[ k ] / 255 : 0;
+					c = mix( c, C.scarp, scarp * 0.5 );
 
 				}
 
