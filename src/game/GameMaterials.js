@@ -1,8 +1,8 @@
 import * as THREE from 'three/webgpu';
 import {
 	Fn, If, float, vec3, attribute, positionLocal, positionWorld, positionView, normalView, normalLocal,
-	cameraPosition, uniform, fract, floor, sin, abs, max, clamp, mix, smoothstep, dot, cross, normalize,
-	length, fwidth, atan,
+	cameraPosition, normalWorldGeometry, uniform, fract, floor, sin, abs, max, clamp, mix, smoothstep, dot, cross, normalize,
+	length, fwidth, atan, select,
 } from 'three/tsl';
 import { standard, physical } from '../materials/Materials.js';
 import { G } from '../core/Globals.js';
@@ -95,7 +95,7 @@ function propSurface() {
 		const rings = sin( q.x.mul( 23 ).add( q.y.mul( 17 ) ).add( grain.mul( 6 ) ).mul( 3 ) ).mul( 0.5 ).add( 0.5 );
 		const blotch = gpFbm( P.mul( 1.3 ) );
 		col.assign( base.mul( mix( 0.72, 1.12, grain ) ).mul( mix( 0.9, 1.05, rings ) ) );
-		col.assign( mix( col, vec3( dot( col, vec3( 0.33 ) ).mul( 1.05 ) ), smoothstep( 0.2, 0.9, normalView.y ).mul( 0.35 ) ) );
+		col.assign( mix( col, vec3( dot( col, vec3( 0.33 ) ).mul( 1.05 ) ), smoothstep( 0.2, 0.9, normalWorldGeometry.y ).mul( 0.35 ) ) );
 		col.mulAssign( mix( 1, 0.72, smoothstep( 0.55, 0.8, blotch ) ) );
 		col.mulAssign( mix( 0.75, 1, smoothstep( 0, 0.6, P.y.sub( G.seaLevel ) ) ) );
 		const crack = smoothstep( 0.62, 0.7, gpNoise( vec3( q.x.mul( 90 ), q.y.mul( 90 ), q.z.mul( 3 ) ) ) );
@@ -220,8 +220,8 @@ export function createPropMaterial( name = 'gameProp', extra = {} ) {
 
 		const carbon = s.pat.greaterThan( 7.5 ).and( s.pat.lessThan( 8.5 ) );
 		const thread = s.pat.greaterThan( 8.5 ).and( s.pat.lessThan( 9.5 ) );
-		m.clearcoatNode = carbon.or( thread ).select( 1, 0 );
-		m.clearcoatRoughnessNode = carbon.select( 0.05, thread.select( 0.04, 0.1 ) );
+		m.clearcoatNode = select( carbon.or( thread ), 1, 0 );
+		m.clearcoatRoughnessNode = select( carbon, 0.05, select( thread, 0.04, 0.1 ) );
 
 	}
 
