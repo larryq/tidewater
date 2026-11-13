@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import {
-	Fn, If, float, vec3, attribute, positionLocal, positionWorld, positionView, normalView, normalLocal,
+	Fn, If, float, vec3, vec4, attribute, positionLocal, positionWorld, positionView, normalView, normalLocal,
 	cameraPosition, normalWorldGeometry, uniform, fract, floor, sin, abs, max, clamp, mix, smoothstep, dot, cross, normalize,
 	length, fwidth, atan, select,
 } from 'three/tsl';
@@ -71,7 +71,7 @@ function makeUniforms( name, spec = {} ) {
 
 }
 
-function propSurface() {
+const propSurface = Fn( () => {
 
 	const base = attribute( 'color', 'vec3' );
 	const aux = attribute( 'aux', 'vec4' );
@@ -196,9 +196,85 @@ function propSurface() {
 
 	} );
 
-	return { color: col, roughness: rough, metalness: aux.y, height, pat };
+	return vec4( col, rough );
 
-}
+} );
+
+// Height-only companion used for the procedural bump normal. Keeping this separate avoids
+// executing stack-based If() outside a TSL Fn while preserving the native material detail.
+const propHeight = Fn( () => {
+
+	const aux = attribute( 'aux', 'vec4' );
+	const lp = attribute( 'position', 'vec3' );
+	const P = positionWorld;
+	const pat = aux.z;
+	const height = float( 0 ).toVar();
+
+	If( pat.greaterThan( 0.5 ).and( pat.lessThan( 1.5 ) ).or( pat.greaterThan( 5.5 ) ), () => {
+
+		const q = lp.xzy.toVar();
+		If( pat.greaterThan( 6.5 ), () => q.assign( lp.xyz ) )
+			.ElseIf( pat.greaterThan( 5.5 ), () => q.assign( lp.yzx ) );
+		const grain = gpFbm( vec3( q.x.mul( 40 ), q.y.mul( 40 ), q.z.mul( 1.6 ) ) );
+		const crack = smoothstep( 0.62, 0.7, gpNoise( vec3( q.x.mul( 90 ), q.y.mul( 90 ), q.z.mul( 3 ) ) ) );
+		height.assign( grain.mul( 0.0015 ).sub( crack.mul( 0.0012 ) ) );
+
+	} ).ElseIf( pat.greaterThan( 1.5 ).and( pat.lessThan( 2.5 ) ), () => {
+
+		const weave = sin( lp.x.mul( 900 ) ).mul( sin( lp.y.mul( 900 ).add( lp.z.mul( 900 ) ) ) )
+			.mul( float( 1 ).sub( smoothstep( 0.002, 0.006, fwidth( lp.x.add( lp.y ) ) ) ) );
+		const fade = gpFbm( P.mul( 2.5 ) );
+		height.assign( weave.mul( 0.0003 ).add( fade.mul( 0.002 ) ) );
+
+	} ).ElseIf( pat.greaterThan( 2.5 ).and( pat.lessThan( 3.5 ) ), () => {
+
+		height.assign( gpFbm( lp.mul( 22 ) ).mul( 0.0008 ) );
+
+	} ).ElseIf( pat.greaterThan( 3.5 ).and( pat.lessThan( 4.5 ) ), () => {
+
+		height.assign( gpNoise( lp.mul( 700 ) ).mul( 0.0004 ) );
+
+	} ).ElseIf( pat.greaterThan( 7.5 ), () => {
+
+		const ang = atan( lp.x, lp.z );
+		If( pat.lessThan( 8.5 ), () => {
+
+			const u = ang.mul( 18 );
+			const w = lp.y.mul( 700 );
+			const aa = float( 1 ).sub( smoothstep( 0.3, 1.2, fwidth( w ) ) );
+			height.assign( sin( u.add( w ) ).mul( sin( u.sub( w ) ) ).mul( 0.00004 ).mul( aa ) );
+
+		} ).ElseIf( pat.lessThan( 9.5 ), () => {
+
+			const w = lp.y.mul( 3200 );
+			const aa = float( 1 ).sub( smoothstep( 0.3, 1.2, fwidth( w ) ) );
+			height.assign( sin( w.add( ang.mul( 0.16 ) ) ).mul( aa ).mul( 0.00003 ) );
+
+		} ).ElseIf( pat.lessThan( 10.5 ), () => {
+
+			height.assign( smoothstep( 0.72, 0.9, gpNoise( lp.mul( 2600 ) ) ).mul( - 0.0002 ) );
+
+		} ).ElseIf( pat.lessThan( 11.5 ), () => {
+
+			const w = lp.y.mul( 1500 );
+			const u = ang.mul( 60 );
+			const aa = float( 1 ).sub( smoothstep( 0.3, 1.2, fwidth( w ) ) );
+			height.assign( sin( u.add( w ) ).mul( 0.5 ).add( 0.5 ).mul( 0.00006 ).mul( aa ) );
+
+		} ).ElseIf( pat.lessThan( 13.5 ).and( pat.greaterThan( 12.5 ) ), () => {
+
+			const u = ang.mul( 24 );
+			const w = lp.y.mul( 900 );
+			const aa = float( 1 ).sub( smoothstep( 0.3, 1.2, fwidth( w ) ) );
+			height.assign( abs( sin( u.add( w ) ) ).mul( abs( sin( u.sub( w ) ) ) ).mul( 0.00012 ).mul( aa ) );
+
+		} );
+
+	} );
+
+	return height;
+
+} );
 
 // extra: { uniforms, positionNode, clearcoat }. positionNode is a callback receiving the
 // compatibility uniform map and returning a TSL position node; it may assign normalLocal too.
@@ -210,16 +286,17 @@ export function createPropMaterial( name = 'gameProp', extra = {} ) {
 	m.name = name;
 	m.uniforms = makeUniforms( name, extra.uniforms );
 
-	const s = propSurface();
-	m.colorNode = s.color;
-	m.roughnessNode = s.roughness;
-	m.metalnessNode = s.metalness;
-	m.normalNode = gpBump( s.height );
+	const surface = propSurface();
+	m.colorNode = surface.xyz;
+	m.roughnessNode = surface.w;
+	m.metalnessNode = attribute( 'aux', 'vec4' ).y;
+	m.normalNode = gpBump( propHeight() );
 
 	if ( extra.clearcoat ) {
 
-		const carbon = s.pat.greaterThan( 7.5 ).and( s.pat.lessThan( 8.5 ) );
-		const thread = s.pat.greaterThan( 8.5 ).and( s.pat.lessThan( 9.5 ) );
+		const pat = attribute( 'aux', 'vec4' ).z;
+		const carbon = pat.greaterThan( 7.5 ).and( pat.lessThan( 8.5 ) );
+		const thread = pat.greaterThan( 8.5 ).and( pat.lessThan( 9.5 ) );
 		m.clearcoatNode = select( carbon.or( thread ), 1, 0 );
 		m.clearcoatRoughnessNode = select( carbon, 0.05, select( thread, 0.04, 0.1 ) );
 
