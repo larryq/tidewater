@@ -23,8 +23,8 @@ Goal: bring current Tidewater features forward onto the Three.js/TSL architectur
 | Gear | carried forward | Renderer-independent |
 | GameState | carried forward | Renderer-independent |
 | Game logic tests | carried forward | Pure Node test |
-| Game coordinator | pending | Mostly JS; adapters needed |
-| Fishing rod | porting next | Geometry reusable; material/vertex animation needs TSL |
+| Game coordinator | pending | Mostly JS; adapters needed |\n| GameMaterials | ported | Procedural props and fishing line translated to TSL |\n| CatchDisplay | ported | Reuses the existing Three FishProps batch API |
+| Fishing rod | ported | TSL material, reel animation, bend and line ribbon |
 | Vendors/stalls | pending | Geometry reusable; loaders/materials need Three adapters |
 | Fish portrait | pending | Needs Three render-target/post implementation |
 | Ocean FFT | existing TSL baseline | Compare current native improvements before changing |
