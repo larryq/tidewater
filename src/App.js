@@ -59,6 +59,7 @@ import { BoatSpray } from './player/BoatSpray.js';
 import { WakeSim } from './ocean/WakeSim.js';
 import { Vegetation } from './world/Vegetation.js';
 import { SoundScape } from './audio/SoundScape.js';
+import { Game } from './game/Game.js';
 import { updateCameraVelocity, useStaticVelocity } from './post/CameraVelocity.js';
 
 const _up = new THREE.Vector3( 0, 1, 0 );
@@ -334,6 +335,9 @@ export class App {
 		// recorded field recordings (public/audio, credits in public/audio/CREDITS.md); ?noAudio turns it off
 		this.audio = qs.has( 'noAudio' ) ? null : new SoundScape();
 		this.player.audio = this.audio;
+		// Fishing game layer: state, rod, vendors, upgrades and HUD. GameHUD is created lazily
+		// after AppUI exists, so constructing it here does not depend on the UI startup order.
+		this.game = new Game( this );
 		this.boatCtl.onSlam = ( s ) => this.audio && this.audio.hullSlap( s );
 		renderer.domElement.addEventListener( 'click', () => {
 
@@ -617,6 +621,7 @@ export class App {
 		this.wake.update( dt );
 		if ( this.freeCam ) this.fly.update( dt );
 		else this.player.update( dt );
+		this.game.update( dt );
 		this.updateSun();
 		this.updateShadowCascades();
 
