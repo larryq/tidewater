@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5188",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node test/game-logic.mjs"
   },
   "dependencies": {
     "three": "^0.186.0"
